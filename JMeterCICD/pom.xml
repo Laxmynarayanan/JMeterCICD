@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.jmeter.sample</groupId>
+  <artifactId>JMeterCI</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>JMeter Maven Implementation</name>
+  <description>JMeter Maven implementation using Jenkins</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>1.7</maven.compiler.source>
+    <maven.compiler.target>1.7</maven.compiler.target>
+    <jmeter.maven.plugin.version>3.7.1</jmeter.maven.plugin.version>
+    <encoding>UTF-8</encoding>
+    <project.build.sourceEncoding>${encoding}</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>${encoding}</project.reporting.outputEncoding>
+    <project.resources.sourceEncoding>${encoding}</project.resources.sourceEncoding>
+    <graph.width>1024</graph.width>
+    <graph.height>768</graph.height>
+<!--    <log4j2.config.path>${basedir}/src/test/jmeter.log4j2.xml</log4j2.config.path>-->
+  </properties>
+  <profiles>
+    <profile>
+    <id>performance</id>
+<!--      Properties will be taken from here first and if it is not present then will look for Jenkins parameter, jmx files.-->
+    <properties>
+      <host>local.performance.test</host>
+      <env>performance</env>
+      <jmeter.thread.groups>test_script</jmeter.thread.groups>
+    </properties>
+    </profile>
+    <profile>
+      <id>test</id>
+      <properties>
+        <host>local.test.test</host>
+        <env>test</env>
+        <jmeter.thread.groups>test_script</jmeter.thread.groups>
+      </properties>
+    </profile>
+  </profiles>
+
+  <dependencies>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>2.17.239</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
+      <plugins>
+        <!-- clean lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
+        <plugin>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.1.0</version>
+        </plugin>
+        <!-- default lifecycle, jar packaging: see https://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
+        <plugin>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.0.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.8.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.22.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.0.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>2.5.2</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>2.8.2</version>
+        </plugin>
+        <!-- site lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#site_Lifecycle -->
+        <plugin>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>3.7.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-project-info-reports-plugin</artifactId>
+          <version>3.0.0</version>
+        </plugin>
+        <plugin>
+          <groupId>com.lazerycode.jmeter</groupId>
+          <artifactId>jmeter-maven-plugin</artifactId>
+          <version>${jmeter.maven.plugin.version}</version>
+            <dependencies>
+              <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-plugin-api</artifactId>
+                <version>3.6.3</version>
+              </dependency>
+              <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-core</artifactId>
+                <version>3.6.3</version>
+              </dependency>
+              <dependency>
+                <groupId>org.apache.maven.plugin-tools</groupId>
+                <artifactId>maven-plugin-annotations</artifactId>
+                <version>3.6.4</version>
+              </dependency>
+              <dependency>
+                <groupId>org.apache.maven.resolver</groupId>
+                <artifactId>maven-resolver-api</artifactId>
+                <version>1.6.3</version>
+              </dependency>
+<!--              Added Under JMeter Extensions-->
+<!--              <dependency>-->
+<!--                <groupId>com.github.johrstrom</groupId>-->
+<!--                <artifactId>jmeter-prometheus-plugin</artifactId>-->
+<!--                <version>0.6.0</version>-->
+<!--              </dependency>-->
+            </dependencies>
+          <executions>
+            <execution>
+              <id>configuration</id>
+              <goals>
+                <goal>configure</goal>
+              </goals>
+            </execution>
+<!--            Run JMeter Tests-->
+            <execution>
+              <id>jmeter-tests</id>
+              <phase>verify</phase>
+              <goals>
+                <goal>jmeter</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>jmeter-check-results</id>
+              <goals>
+                <goal>results</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <jmeterExtensions>
+<!--              Plugin for JMeter Prometheus Monitoring-->
+              <artifact>com.github.johrstrom:jmeter-prometheus-plugin:0.6.0</artifact>
+<!--              Plugin for Parallel resources i.e. AJAX/ Parallel downloads etc-->
+              <artifact>com.blazemeter:jmeter-parallel:0.11</artifact>
+            </jmeterExtensions>
+            <downloadExtensionDependencies>false</downloadExtensionDependencies>
+            <jmeterVersion>5.5</jmeterVersion>
+            <overrideRootLogLevel>${loglevel}</overrideRootLogLevel>
+            <testFilesDirectory>${basedir}/src/test/jmeter/${env}</testFilesDirectory>
+            <resultsDirectory>${basedir}/target/jmeter/results</resultsDirectory>
+            <testResultsTimestamp>false</testResultsTimestamp>
+            <propertiesUser>
+<!--              Prometheus Config-->
+              <prometheus.enable>true</prometheus.enable>
+              <prometheus.exporter.ip>0.0.0.0</prometheus.exporter.ip>
+              <prometheus.exporter.port>9270</prometheus.exporter.port>
+              <prometheus.exporter.interval>5s</prometheus.exporter.interval>
+              <prometheus.expoeter.delay>10s</prometheus.expoeter.delay>
+              <prometheus.exporter.thread>true</prometheus.exporter.thread>
+              <prometheus.exporter.threads.name>true</prometheus.exporter.threads.name>
+              <prometheus.exporter.jvm>true</prometheus.exporter.jvm>
+<!--              Network Conditions Config-->
+              <networkConfig>
+                <downsteamKbps>4096</downsteamKbps>
+                <upstreamKbps>3072</upstreamKbps>
+                <latency>20</latency>
+                <packetLoss>0.0</packetLoss>
+              </networkConfig>
+              <log_level.jmeter>${loglevel}</log_level.jmeter>
+              <log_level.jmeter.test>${loglevel}</log_level.jmeter.test>
+              <log_level.jmeter.protocol.http>${loglevel}</log_level.jmeter.protocol.http>
+              <log_level.com.github.johrstrom>${loglevel}</log_level.com.github.johrstrom>
+              <log_level.org.apache.http.impl.conn>${loglevel}</log_level.org.apache.http.impl.conn>
+              <log_level.org.apache.http.impl.client>${loglevel}</log_level.org.apache.http.impl.client>
+              <log_level.org.apache.http.client>${loglevel}</log_level.org.apache.http.client>
+              <jmeter.save.saveservice.output_format>json</jmeter.save.saveservice.output_format>
+<!--              Application Properties-->
+              <app.protocol>${protocol}</app.protocol>
+              <app.port>${port}</app.port>
+              <connect.timeout>${connect.timeout}</connect.timeout>
+              <response.timeout>${response.timeout}</response.timeout>
+              <startup.delay>${startup.delay}</startup.delay>
+            </propertiesUser>
+<!--            JVM Settings-->
+            <jMeterProcessJVMSettings>
+              <xms>2048</xms>
+              <xmx>2048</xmx>
+              <arguments>
+                <argument>-XX:MaxMetaspaceSize=768m</argument>
+              </arguments>
+            </jMeterProcessJVMSettings>
+<!--            JMeter Report Generator Properties-->
+            <propertiesUser>
+              <jmeter.reportgenerator.date_format>ddMMyyyy HHmmss</jmeter.reportgenerator.date_format>
+              <jmeter.reportgenerator.report_title>Performance Test Report - ${env}</jmeter.reportgenerator.report_title>
+              <jmeter.reportgenerator.apdex_satisfied_threshold>5</jmeter.reportgenerator.apdex_satisfied_threshold>
+              <jmeter.reportgenerator.apdex_tolerated_threshold>10</jmeter.reportgenerator.apdex_tolerated_threshold>
+              <jmeter.reportgenerator.overall_granularity>500</jmeter.reportgenerator.overall_granularity>
+              <jmeter.reportgenerator.exporter.html.filters_only_sample_series>true</jmeter.reportgenerator.exporter.html.filters_only_sample_series>
+<!--              JMeter Scenario Settings-->
+              <threads>${Users}</threads>
+              <rampup>${Rampup}</rampup>
+              <duration>${Duration}</duration>
+              <environment>${env}</environment>
+              <url>${BaseURL}}</url>
+            </propertiesUser>
+            <resultsFileFormat>xml</resultsFileFormat>
+            <ignoreResultFailures>true</ignoreResultFailures>
+            <generateReport>true</generateReport>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>de.codecentric</groupId>
+          <artifactId>jmeter-graph-maven-plugin</artifactId>
+          <version>0.1.0</version>
+          <configuration>
+            <inputFile>${project.build.directory}/jmeter/results/testresults.csv</inputFile>
+<!--            JMeter Graphs for Jmeter Graph Maven Plugin-->
+            <graphs>
+              <pluginType>ThreadsStateOverTime</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ThreadStateOverTime.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ByteThroughputOverTime</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ByteThroughputOverTime.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>HitsPerSecond</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/HitsPerSecond.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>LatenciesOverTime</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/LatenciesOverTime.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ResponseCodesPerSecond</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ResponseCodesPerSecond.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ResponseTimesDistribution</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ResponseTimesDistribution.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ResponseTimesOverTime</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ResponseTimesOverTime.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ResponseTimesPercentiles</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ResponseTimesPercentiles.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>ThroughputVsThreads</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/ThroughputVsThreads.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>TimesVsThreads</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/TimesVsThreads.png</outputFile>
+            </graphs>
+            <graphs>
+              <pluginType>TransactionsPerSecond</pluginType>
+              <width>${graph.width}</width>
+              <height>${graph.height}</height>
+              <outputFile>${project.build.directory}/jmeter/results/graphs/TransactionsPerSecond.png</outputFile>
+            </graphs>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

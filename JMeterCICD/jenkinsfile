@@ -1,0 +1,100 @@
+pipeline {
+    agent {
+        node {
+            label 'perf'
+        }
+    }
+    environment {
+        def BUILDVERSION = sh(script: "echo 'date +%d-%m-%Y_%H-%M-%S'", returnStdout: true).trim()
+        def KUBECONFIG = "root/.kube/config"
+        def BUCKET_NAME = "test-report/${params.TestEnv}_Perf"
+        def GIT_TAG = "${params.GitTag}"
+        def REPORT_PATH = "http://localhost:5000/${params.TestEnv}_Perf"
+    }
+    parameters {
+        string(name: 'GitTag', defaultValue: 'develop', description: 'The branch to run the tests')
+        choice(name: 'TestEnv', choices: ['dev','test', 'perf'], description: "Select the environment to run the test")
+    }
+    tools {
+        maven 'maven'
+        jdk 'jdk17'
+        nodejs 'node'
+    }
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                git branch: params.GitTag, credentialsId: 'build-user', url: env.GIT_URL
+            }
+        }
+        stage('Execute JMeter Tests') {
+            steps {
+                script {
+                    catchError(message: "Test Failure", stageResult: "FAILURE") {
+                        configFileProvider([configFile(fileId: '0000-0000-000-0000', targetLocation: '/var/jenkins/settings.xml', variable: 'MAVEN_SETTINGS')]) {
+                            sh "mvn clean verify -P ${params.TestEnv}"
+                        }
+                    }
+                }
+            }
+        }
+        stage('Validate Test Results') {
+            steps {
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        def tResAvgTime = 200
+                        def tRes95Time = 500
+                        def tErrRate = 1
+
+                        def statsFile = findFiles(glob: '**/statistics.json', type: 'file').first()
+
+                        if (statsFile == null) {
+                            error "Statistics File not found"
+                        }
+
+                        def statsJson = readJSON file: statsFile.path
+                        def alltrans = statsJson.keySet() - 'Total'
+
+                        for (trans in alltrans) {
+                            def data = statsJson[trans]
+                            def res95Time = data.pct2ResTime
+                            def resAvgTime = data.meanResTime
+                            def errRate = data.errorPct
+
+                            if (res95Time > tRes95Time) {
+                                error "95 percentile response time threshold for ${trans} (${res95Time} ms) exceeded threshold (${tRes95Time} ms)"
+                            }
+                            if (resAvgTime > tResAvgTime) {
+                                error "Average response time threshold for ${trans} (${resAvgTime} ms) exceeded threshold (${tResAvgTime} ms)"
+                            }
+                            if (errRate > tErrRate) {
+                                error "Error threshold for ${trans} (${errRate}%) exceeded threshold (${tErrRate}%)"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage('Create Report Path') {
+            steps{
+                script {
+                    env.INDEX_PATH = "${REPORT_PATH}/${GIT_TAG}_${BUILDVERSION}/index.html"
+                    sh 'env | grep -i INDEX_PATH'
+                }
+            }
+        }
+        stage('Upload Reports to S3 BUCKET') {
+            when {
+                expression { params.SaveResult == 'YES' }
+            }
+            steps{
+                sh 'aws s3 cp ./target/jmeter s3://${BUCKET_NAME}/${GIT_TAG}_${BUILDVERSION}/ --quiet --recursive --sse aws:kms'
+                sh 'aws s3 cp tag-version.json s3://${BUCKET_NAME}/${GIT_TAG}_${BUILDVERSION}/ --quiet --sse aws:kms'
+            }
+        }
+    }
+            post {
+                always{
+                    perfReport '**/*Report*.csv'
+                }
+            }
+}
